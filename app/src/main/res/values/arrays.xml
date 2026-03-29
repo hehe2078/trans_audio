@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="output_formats">
+        <item>MP3 音频</item>
+        <item>M4A 音频 (AAC)</item>
+        <item>AAC 音频</item>
+        <item>WAV 音频</item>
+        <item>MP4 视频</item>
+    </string-array>
+
+    <string-array name="bitrate_options">
+        <item>128 kbps</item>
+        <item>192 kbps</item>
+        <item>320 kbps</item>
+    </string-array>
+</resources>
