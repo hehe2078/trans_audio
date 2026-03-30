@@ -43,9 +43,6 @@
             </intent-filter>
         </activity>
 
-        <activity
-            android:name=".PlayerActivity"
-            android:exported="false" />
     </application>
 
 </manifest>

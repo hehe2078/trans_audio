@@ -2,10 +2,9 @@
 <resources>
     <string name="app_name">音视频转 MP3</string>
     <string name="title_main">音视频转 MP3</string>
-    <string name="description_main">选择任意常见音频或视频文件，应用会统一调用 FFmpeg 转成 MP3，并保存到 Download/audio_autotrans。</string>
+    <string name="description_main">选择任意常见音频或视频文件，应用会统一调用 FFmpeg 转成 MP3，并保存到 Download/audio_autotrans。转换后还会自动更新一个通用配置文件 audio_autotrans_config.json。</string>
     <string name="action_choose_file">选择音频或视频文件</string>
     <string name="action_convert">开始转换为 MP3</string>
-    <string name="action_open_player">打开已转换 MP3 播放页</string>
     <string name="selected_file_empty">当前未选择文件</string>
     <string name="selected_file_value">已选择：%1$s</string>
     <string name="source_info_empty">源文件信息：等待选择文件</string>
@@ -34,8 +33,13 @@
     <string name="player_idle">当前未播放</string>
     <string name="player_now_playing">正在播放：%1$s</string>
     <string name="player_refresh">刷新列表</string>
+    <string name="player_play">播放</string>
+    <string name="player_pause">暂停</string>
+    <string name="player_resume">继续</string>
     <string name="player_stop">停止播放</string>
     <string name="player_empty">还没有找到已转换的 MP3 文件。</string>
     <string name="player_hint">点列表中的 MP3 文件即可开始播放。</string>
     <string name="player_play_failed">播放失败：%1$s</string>
+    <string name="tab_convert">转换</string>
+    <string name="tab_player">播放</string>
 </resources>
