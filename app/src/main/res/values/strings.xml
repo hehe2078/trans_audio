@@ -1,22 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">音视频转换器</string>
-    <string name="title_main">音视频转换器</string>
-    <string name="description_main">支持选择常见音频或视频文件，按你指定的输出格式和码率进行转换。转换完成后，文件会保存到系统 Download/audio_autotrans 文件夹。</string>
+    <string name="app_name">音视频转 MP3</string>
+    <string name="title_main">音视频转 MP3</string>
+    <string name="description_main">选择任意常见音频或视频文件，应用会统一调用 FFmpeg 转成 MP3，并保存到 Download/audio_autotrans。</string>
     <string name="action_choose_file">选择音频或视频文件</string>
-    <string name="action_convert">开始转换并保存到 Download</string>
+    <string name="action_convert">开始转换为 MP3</string>
     <string name="action_open_player">打开已转换 MP3 播放页</string>
     <string name="selected_file_empty">当前未选择文件</string>
     <string name="selected_file_value">已选择：%1$s</string>
     <string name="source_info_empty">源文件信息：等待选择文件</string>
     <string name="source_info_value">源文件信息：%1$s</string>
-    <string name="label_output_format">输出格式</string>
-    <string name="label_bitrate">音频码率</string>
+    <string name="label_bitrate">MP3 码率</string>
     <string name="status_label">当前状态</string>
     <string name="status_idle">等待选择音频或视频文件</string>
-    <string name="status_ready">文件已就绪，可以开始转换</string>
-    <string name="status_received_external">已接收来自外部应用的文件，可以直接开始转换</string>
-    <string name="status_processing">正在转换，请稍候…</string>
+    <string name="status_ready">文件已就绪，可以开始转 MP3</string>
+    <string name="status_received_external">已接收来自外部应用的文件，可以直接开始转 MP3</string>
+    <string name="status_processing">正在转换为 MP3，请稍候…</string>
     <string name="status_success">转换成功：%1$s，已保存到 %2$s</string>
     <string name="status_failed">转换失败</string>
     <string name="status_failed_with_reason">转换失败：%1$s</string>
@@ -24,12 +23,11 @@
     <string name="status_permission_denied">没有存储权限，无法写入 Download/audio_autotrans 文件夹</string>
     <string name="status_choose_file_first">请先选择一个源文件</string>
     <string name="error_open_source">无法读取所选源文件</string>
-    <string name="error_convert_failed">FFmpeg 未生成有效的输出文件</string>
+    <string name="error_convert_failed">FFmpeg 未生成有效的 MP3 文件</string>
     <string name="error_create_download">无法在 Download/audio_autotrans 文件夹中创建目标文件</string>
     <string name="error_write_download">无法写入 Download/audio_autotrans 文件夹中的文件</string>
     <string name="error_download_dir">无法访问 Download/audio_autotrans 文件夹</string>
-    <string name="error_video_required">当前输出格式需要源文件中包含视频轨道</string>
-    <string name="error_audio_required">当前输出格式需要源文件中包含音频轨道</string>
+    <string name="error_audio_required">该文件没有可转换的音轨，无法输出 MP3</string>
     <string name="error_unknown_stream">无法识别该文件中的音频或视频流</string>
     <string name="player_title">已转换 MP3</string>
     <string name="player_description">这里会列出保存在 Download/audio_autotrans 下的 MP3 文件，点一下即可播放。</string>

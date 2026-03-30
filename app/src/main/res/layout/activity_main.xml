@@ -55,25 +55,10 @@
             android:textSize="14sp" />
 
         <TextView
-            android:id="@+id/outputFormatLabel"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:text="@string/label_output_format"
-            android:textColor="@color/text_secondary"
-            android:textStyle="bold" />
-
-        <Spinner
-            android:id="@+id/outputFormatSpinner"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp" />
-
-        <TextView
             android:id="@+id/bitrateLabel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
+            android:layout_marginTop="24dp"
             android:text="@string/label_bitrate"
             android:textColor="@color/text_secondary"
             android:textStyle="bold" />

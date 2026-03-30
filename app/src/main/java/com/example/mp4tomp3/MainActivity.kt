@@ -42,11 +42,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var selectedFileText: TextView
     private lateinit var sourceInfoText: TextView
     private lateinit var progressBar: ProgressBar
-    private lateinit var outputFormatSpinner: Spinner
     private lateinit var bitrateSpinner: Spinner
     private lateinit var bitrateLabel: TextView
 
-    private lateinit var selectedOutputFormat: OutputFormat
     private lateinit var selectedBitrate: AudioBitrate
 
     private var selectedSourceUri: Uri? = null
@@ -89,11 +87,10 @@ class MainActivity : AppCompatActivity() {
         selectedFileText = findViewById(R.id.selectedFileText)
         sourceInfoText = findViewById(R.id.sourceInfoText)
         progressBar = findViewById(R.id.progressBar)
-        outputFormatSpinner = findViewById(R.id.outputFormatSpinner)
         bitrateSpinner = findViewById(R.id.bitrateSpinner)
         bitrateLabel = findViewById(R.id.bitrateLabel)
 
-        bindSpinners()
+        bindBitrateSpinner()
         handleIncomingIntent(intent)
 
         chooseButton.setOnClickListener {
@@ -112,29 +109,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             val sourceInfo = selectedSourceInfo ?: readSourceInfo(uri)
-            if (sourceInfo == null || (!sourceInfo.hasAudio && !sourceInfo.hasVideo)) {
-                updateStatus(
-                    getString(
-                        R.string.status_failed_with_reason,
-                        getString(R.string.error_unknown_stream)
-                    )
-                )
-                toast(getString(R.string.status_failed))
-                return@setOnClickListener
-            }
-
-            if (selectedOutputFormat.requiresVideo && !sourceInfo.hasVideo) {
-                updateStatus(
-                    getString(
-                        R.string.status_failed_with_reason,
-                        getString(R.string.error_video_required)
-                    )
-                )
-                toast(getString(R.string.error_video_required))
-                return@setOnClickListener
-            }
-
-            if (selectedOutputFormat.requiresAudio && !sourceInfo.hasAudio) {
+            if (sourceInfo == null || !sourceInfo.hasAudio) {
                 updateStatus(
                     getString(
                         R.string.status_failed_with_reason,
@@ -171,7 +146,7 @@ class MainActivity : AppCompatActivity() {
 
             try {
                 val result = withContext(Dispatchers.IO) {
-                    convertSource(sourceUri)
+                    convertSourceToMp3(sourceUri)
                 }
                 val successMessage = getString(
                     R.string.status_success,
@@ -190,18 +165,18 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun convertSource(sourceUri: Uri): ConversionResult {
+    private fun convertSourceToMp3(sourceUri: Uri): ConversionResult {
         val sourceName = queryDisplayName(sourceUri) ?: "media_${System.currentTimeMillis()}"
         val baseName = sourceName.substringBeforeLast('.').ifBlank { "output_${System.currentTimeMillis()}" }
         val tempInput = File(cacheDir, "input_${System.currentTimeMillis()}_${sourceName}")
-        val tempOutput = File(cacheDir, "output_${System.currentTimeMillis()}.${selectedOutputFormat.extension}")
+        val tempOutput = File(cacheDir, "output_${System.currentTimeMillis()}.mp3")
 
         try {
             openSourceInputStream(sourceUri)?.use { input ->
                 FileOutputStream(tempInput).use { output -> input.copyTo(output) }
             } ?: throw IllegalStateException(getString(R.string.error_open_source))
 
-            runConversion(tempInput, tempOutput)
+            runMp3Conversion(tempInput, tempOutput)
 
             val outputName = buildOutputName(baseName)
             val destination = writeOutputToDownloads(tempOutput, outputName)
@@ -212,11 +187,32 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun runMp3Conversion(tempInput: File, tempOutput: File) {
+        val command = buildMp3Command(
+            inputPath = tempInput.absolutePath,
+            outputPath = tempOutput.absolutePath,
+            bitrate = selectedBitrate
+        )
+
+        val session = FFmpegKit.execute(command)
+        if (!ReturnCode.isSuccess(session.returnCode) || !tempOutput.exists() || tempOutput.length() == 0L) {
+            val details = session.allLogsAsString.takeIf { !it.isNullOrBlank() }
+            throw IllegalStateException(details ?: getString(R.string.error_convert_failed))
+        }
+    }
+
+    private fun buildMp3Command(inputPath: String, outputPath: String, bitrate: AudioBitrate): String {
+        val quotedInput = quotePath(inputPath)
+        val quotedOutput = quotePath(outputPath)
+        return "-y -i $quotedInput -vn -acodec libmp3lame -b:a ${bitrate.ffmpegValue} $quotedOutput"
+    }
+
     private fun writeOutputToDownloads(tempOutput: File, outputName: String): String {
+        val mimeType = "audio/mpeg"
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val values = ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME, outputName)
-                put(MediaStore.MediaColumns.MIME_TYPE, selectedOutputFormat.mimeType)
+                put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
                 put(MediaStore.MediaColumns.RELATIVE_PATH, "${StorageConfig.RELATIVE_DOWNLOAD_PATH}/")
                 put(MediaStore.MediaColumns.IS_PENDING, 1)
             }
@@ -260,45 +256,16 @@ class MainActivity : AppCompatActivity() {
             MediaScannerConnection.scanFile(
                 this,
                 arrayOf(destinationFile.absolutePath),
-                arrayOf(selectedOutputFormat.mimeType),
+                arrayOf(mimeType),
                 null
             )
             destinationFile.absolutePath
         }
     }
 
-    private fun runConversion(tempInput: File, tempOutput: File) {
-        if (selectedOutputFormat == OutputFormat.MP4) {
-            val fastRemuxCommand = selectedOutputFormat.buildFastRemuxCommand(
-                inputPath = tempInput.absolutePath,
-                outputPath = tempOutput.absolutePath
-            )
-            val remuxSession = FFmpegKit.execute(fastRemuxCommand)
-            if (ReturnCode.isSuccess(remuxSession.returnCode) &&
-                tempOutput.exists() &&
-                tempOutput.length() > 0L
-            ) {
-                return
-            }
-            tempOutput.delete()
-        }
-
-        val command = selectedOutputFormat.buildCommand(
-            inputPath = tempInput.absolutePath,
-            outputPath = tempOutput.absolutePath,
-            bitrate = selectedBitrate
-        )
-
-        val session = FFmpegKit.execute(command)
-        if (!ReturnCode.isSuccess(session.returnCode) || !tempOutput.exists() || tempOutput.length() == 0L) {
-            val details = session.allLogsAsString.takeIf { !it.isNullOrBlank() }
-            throw IllegalStateException(details ?: getString(R.string.error_convert_failed))
-        }
-    }
-
     private fun buildOutputName(baseName: String): String {
         val safeBaseName = baseName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
-        return "${safeBaseName}_${selectedOutputFormat.fileSuffix}.${selectedOutputFormat.extension}"
+        return "${safeBaseName}_to_mp3.mp3"
     }
 
     private fun queryDisplayName(uri: Uri): String? {
@@ -311,6 +278,11 @@ class MainActivity : AppCompatActivity() {
             }
 
         return uri.lastPathSegment?.substringAfterLast('/')
+    }
+
+    private fun quotePath(path: String): String {
+        val escaped = path.replace("\\", "\\\\").replace("\"", "\\\"")
+        return "\"$escaped\""
     }
 
     private fun needsLegacyWritePermission(): Boolean {
@@ -328,6 +300,7 @@ class MainActivity : AppCompatActivity() {
         chooseButton.isEnabled = !isLoading
         convertButton.isEnabled = !isLoading && selectedSourceUri != null
         openPlayerButton.isEnabled = !isLoading
+        bitrateSpinner.isEnabled = !isLoading
         progressBar.visibility = if (isLoading) View.VISIBLE else View.GONE
     }
 
@@ -339,38 +312,18 @@ class MainActivity : AppCompatActivity() {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
 
-    private fun bindSpinners() {
-        selectedOutputFormat = OutputFormat.MP3
+    private fun bindBitrateSpinner() {
         selectedBitrate = AudioBitrate.K192
 
-        outputFormatSpinner.adapter = ArrayAdapter.createFromResource(
-            this,
-            R.array.output_formats,
-            android.R.layout.simple_spinner_dropdown_item
-        )
         bitrateSpinner.adapter = ArrayAdapter.createFromResource(
             this,
             R.array.bitrate_options,
             android.R.layout.simple_spinner_dropdown_item
         )
-
-        outputFormatSpinner.setSelection(OutputFormat.entries.indexOf(selectedOutputFormat))
         bitrateSpinner.setSelection(AudioBitrate.entries.indexOf(selectedBitrate))
-        updateBitrateVisibility()
-
-        outputFormatSpinner.onItemSelectedListener = SimpleItemSelectedListener { position ->
-            selectedOutputFormat = OutputFormat.entries[position]
-            updateBitrateVisibility()
-        }
         bitrateSpinner.onItemSelectedListener = SimpleItemSelectedListener { position ->
             selectedBitrate = AudioBitrate.entries[position]
         }
-    }
-
-    private fun updateBitrateVisibility() {
-        val visible = if (selectedOutputFormat.supportsBitrateSelection) View.VISIBLE else View.GONE
-        bitrateLabel.visibility = visible
-        bitrateSpinner.visibility = visible
     }
 
     private fun handleIncomingIntent(intent: Intent?) {
@@ -491,79 +444,6 @@ private enum class AudioBitrate(val ffmpegValue: String) {
     K128("128k"),
     K192("192k"),
     K320("320k")
-}
-
-private enum class OutputFormat(
-    val extension: String,
-    val mimeType: String,
-    val fileSuffix: String,
-    val requiresAudio: Boolean,
-    val requiresVideo: Boolean,
-    val supportsBitrateSelection: Boolean
-) {
-    MP3(
-        extension = "mp3",
-        mimeType = "audio/mpeg",
-        fileSuffix = "to_mp3",
-        requiresAudio = true,
-        requiresVideo = false,
-        supportsBitrateSelection = true
-    ),
-    M4A(
-        extension = "m4a",
-        mimeType = "audio/mp4",
-        fileSuffix = "to_m4a",
-        requiresAudio = true,
-        requiresVideo = false,
-        supportsBitrateSelection = true
-    ),
-    AAC(
-        extension = "aac",
-        mimeType = "audio/aac",
-        fileSuffix = "to_aac",
-        requiresAudio = true,
-        requiresVideo = false,
-        supportsBitrateSelection = true
-    ),
-    WAV(
-        extension = "wav",
-        mimeType = "audio/wav",
-        fileSuffix = "to_wav",
-        requiresAudio = true,
-        requiresVideo = false,
-        supportsBitrateSelection = false
-    ),
-    MP4(
-        extension = "mp4",
-        mimeType = "video/mp4",
-        fileSuffix = "to_mp4",
-        requiresAudio = false,
-        requiresVideo = true,
-        supportsBitrateSelection = true
-    );
-
-    fun buildCommand(inputPath: String, outputPath: String, bitrate: AudioBitrate): String {
-        val quotedInput = quotePath(inputPath)
-        val quotedOutput = quotePath(outputPath)
-        return when (this) {
-            MP3 -> "-y -i $quotedInput -vn -acodec libmp3lame -b:a ${bitrate.ffmpegValue} $quotedOutput"
-            M4A -> "-y -i $quotedInput -vn -c:a aac -b:a ${bitrate.ffmpegValue} -movflags +faststart $quotedOutput"
-            AAC -> "-y -i $quotedInput -vn -c:a aac -b:a ${bitrate.ffmpegValue} $quotedOutput"
-            WAV -> "-y -i $quotedInput -vn -c:a pcm_s16le $quotedOutput"
-            MP4 -> "-y -i $quotedInput -c:v libx264 -preset veryfast -crf 23 -c:a aac -b:a ${bitrate.ffmpegValue} -movflags +faststart $quotedOutput"
-        }
-    }
-
-    fun buildFastRemuxCommand(inputPath: String, outputPath: String): String {
-        val quotedInput = quotePath(inputPath)
-        val quotedOutput = quotePath(outputPath)
-        return "-y -i $quotedInput -map 0:v:0? -map 0:a:0? -c copy -movflags +faststart $quotedOutput"
-    }
-
-    private fun quotePath(path: String): String {
-        val escaped = path.replace("\\", "\\\\").replace("\"", "\\\"")
-        return "\"$escaped\""
-    }
 }
 
 private class SimpleItemSelectedListener(
