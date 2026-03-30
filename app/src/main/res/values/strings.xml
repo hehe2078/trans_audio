@@ -27,7 +27,11 @@
     <string name="error_write_download">无法写入 Download/audio_autotrans 文件夹中的文件</string>
     <string name="error_download_dir">无法访问 Download/audio_autotrans 文件夹</string>
     <string name="error_audio_required">该文件没有可转换的音轨，无法输出 MP3</string>
-    <string name="error_unknown_stream">无法识别该文件中的音频或视频流</string>
+    <string name="error_unknown_stream">未识别到音频或视频流</string>
+    <string name="media_info_audio_video">包含音频和视频</string>
+    <string name="media_info_video_only">仅包含视频</string>
+    <string name="media_info_audio_only">仅包含音频</string>
+
     <string name="player_title">已转换 MP3</string>
     <string name="player_description">这里会列出保存在 Download/audio_autotrans 下的 MP3 文件，点一下即可播放。</string>
     <string name="player_idle">当前未播放</string>
@@ -40,6 +44,26 @@
     <string name="player_empty">还没有找到已转换的 MP3 文件。</string>
     <string name="player_hint">点列表中的 MP3 文件即可开始播放。</string>
     <string name="player_play_failed">播放失败：%1$s</string>
+
+    <string name="subtitle_title">字幕识别</string>
+    <string name="subtitle_description">选择本地音频或视频文件，应用会先用 FFmpeg 提取标准 WAV，再通过本地离线 Whisper 模型识别字幕文本。当前版本默认中英自动识别，只在页面中显示文本结果。</string>
+    <string name="action_choose_subtitle_file">选择字幕识别文件</string>
+    <string name="action_recognize_subtitle">开始识别字幕</string>
+    <string name="subtitle_status_label">识别状态</string>
+    <string name="subtitle_status_idle">等待选择要识别的音频或视频文件</string>
+    <string name="subtitle_status_ready">文件已就绪，可以开始识别字幕</string>
+    <string name="subtitle_status_processing">正在识别字幕，请稍候…</string>
+    <string name="subtitle_status_success">字幕识别完成，语言模式：%1$s</string>
+    <string name="subtitle_status_failed">字幕识别失败：%1$s</string>
+    <string name="subtitle_result_label">识别结果</string>
+    <string name="subtitle_result_placeholder">识别结果会显示在这里。</string>
+    <string name="subtitle_error_no_audio">该文件没有音轨，无法识别字幕。</string>
+    <string name="subtitle_error_wav_failed">无法将源文件转换为标准 WAV。</string>
+    <string name="subtitle_error_empty_audio">音频内容为空，无法识别字幕。</string>
+    <string name="subtitle_error_empty_result">模型没有返回可用的字幕文本。</string>
+    <string name="subtitle_language_auto">中英自动识别</string>
+
     <string name="tab_convert">转换</string>
     <string name="tab_player">播放</string>
+    <string name="tab_subtitle">字幕</string>
 </resources>

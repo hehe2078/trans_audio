@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Mp4ToMp3App"
 include(":app")
+include(":whisperlib")

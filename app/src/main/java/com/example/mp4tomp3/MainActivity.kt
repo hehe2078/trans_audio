@@ -34,7 +34,6 @@ import org.json.JSONObject
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.io.InputStream
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -53,24 +52,33 @@ class MainActivity : AppCompatActivity() {
     private lateinit var bottomNavigationView: BottomNavigationView
     private lateinit var converterTabContainer: View
     private lateinit var playerTabContainer: View
+    private lateinit var subtitleTabContainer: View
     private lateinit var playerController: Mp3PlayerController
+    private lateinit var subtitleController: SubtitleRecognitionController
 
     private lateinit var selectedBitrate: AudioBitrate
 
     private var selectedSourceUri: Uri? = null
     private var pendingPermissionUri: Uri? = null
     private var conversionJob: Job? = null
-    private var selectedSourceInfo: SourceInfo? = null
+    private var selectedSourceInfo: MediaSourceInfo? = null
+    private var pendingPickTarget: PickTarget = PickTarget.CONVERTER
 
     private val pickMediaLauncher =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             if (uri == null) {
-                updateStatus(getString(R.string.status_pick_cancelled))
+                when (pendingPickTarget) {
+                    PickTarget.CONVERTER -> updateStatus(getString(R.string.status_pick_cancelled))
+                    PickTarget.SUBTITLE -> Unit
+                }
                 return@registerForActivityResult
             }
 
             grantPersistableReadPermission(uri)
-            bindSelectedSource(uri, fromExternalApp = false)
+            when (pendingPickTarget) {
+                PickTarget.CONVERTER -> bindSelectedSource(uri, fromExternalApp = false)
+                PickTarget.SUBTITLE -> subtitleController.bindSelectedSource(uri)
+            }
         }
 
     private val requestLegacyWritePermissionLauncher =
@@ -100,13 +108,24 @@ class MainActivity : AppCompatActivity() {
         bottomNavigationView = findViewById(R.id.bottomNavigationView)
         converterTabContainer = findViewById(R.id.converterTabContainer)
         playerTabContainer = findViewById(R.id.playerTabContainer)
+        subtitleTabContainer = findViewById(R.id.subtitleTabContainer)
         playerController = Mp3PlayerController(this, playerTabContainer)
+        subtitleController = SubtitleRecognitionController(
+            activity = this,
+            rootView = subtitleTabContainer,
+            subtitleRecognizer = SubtitleRecognizer(applicationContext),
+            onChooseSource = {
+                pendingPickTarget = PickTarget.SUBTITLE
+                pickMediaLauncher.launch(arrayOf("video/*", "audio/*"))
+            }
+        )
 
         bindBitrateSpinner()
         bindBottomNavigation()
         handleIncomingIntent(intent)
 
         chooseButton.setOnClickListener {
+            pendingPickTarget = PickTarget.CONVERTER
             pickMediaLauncher.launch(arrayOf("video/*", "audio/*"))
         }
 
@@ -117,7 +136,7 @@ class MainActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
-            val sourceInfo = selectedSourceInfo ?: readSourceInfo(uri)
+            val sourceInfo = selectedSourceInfo ?: MediaSourceUtils.readSourceInfo(this, uri)
             if (sourceInfo == null || !sourceInfo.hasAudio) {
                 updateStatus(
                     getString(
@@ -147,6 +166,7 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         playerController.release()
+        subtitleController.release()
     }
 
     private fun startConversion(sourceUri: Uri) {
@@ -181,13 +201,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun convertSourceToMp3(sourceUri: Uri): ConversionResult {
-        val sourceName = queryDisplayName(sourceUri) ?: "media_${System.currentTimeMillis()}"
+        val sourceName = MediaSourceUtils.queryDisplayName(this, sourceUri)
+            ?: "media_${System.currentTimeMillis()}"
         val baseName = sourceName.substringBeforeLast('.').ifBlank { "output_${System.currentTimeMillis()}" }
         val tempInput = File(cacheDir, "input_${System.currentTimeMillis()}_$sourceName")
         val tempOutput = File(cacheDir, "output_${System.currentTimeMillis()}.mp3")
 
         try {
-            openSourceInputStream(sourceUri)?.use { input ->
+            MediaSourceUtils.openInputStream(this, sourceUri)?.use { input ->
                 FileOutputStream(tempInput).use { output -> input.copyTo(output) }
             } ?: throw IllegalStateException(getString(R.string.error_open_source))
 
@@ -331,11 +352,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadMetadataConfig(): JSONObject {
         val existingText = readMetadataConfigText()
-        return if (existingText.isNullOrBlank()) {
-            JSONObject()
-        } else {
-            runCatching { JSONObject(existingText) }.getOrElse { JSONObject() }
-        }
+        return if (existingText.isNullOrBlank()) JSONObject() else runCatching { JSONObject(existingText) }.getOrElse { JSONObject() }
     }
 
     private fun readMetadataConfigText(): String? {
@@ -357,8 +374,7 @@ class MainActivity : AppCompatActivity() {
             )?.use { cursor ->
                 if (cursor.moveToFirst()) {
                     val id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Downloads._ID))
-                    val uri =
-                        Uri.withAppendedPath(MediaStore.Downloads.EXTERNAL_CONTENT_URI, id.toString())
+                    val uri = Uri.withAppendedPath(MediaStore.Downloads.EXTERNAL_CONTENT_URI, id.toString())
                     return contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
                 }
             }
@@ -369,11 +385,7 @@ class MainActivity : AppCompatActivity() {
                     ?: return null
             val metadataFile =
                 File(File(downloadsDir, StorageConfig.DOWNLOAD_SUBDIRECTORY), StorageConfig.METADATA_FILE_NAME)
-            if (!metadataFile.exists()) {
-                null
-            } else {
-                metadataFile.readText(Charsets.UTF_8)
-            }
+            if (!metadataFile.exists()) null else metadataFile.readText(Charsets.UTF_8)
         }
     }
 
@@ -463,9 +475,7 @@ class MainActivity : AppCompatActivity() {
             val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
             while (true) {
                 val read = input.read(buffer)
-                if (read <= 0) {
-                    break
-                }
+                if (read <= 0) break
                 digest.update(buffer, 0, read)
             }
         }
@@ -485,18 +495,6 @@ class MainActivity : AppCompatActivity() {
         return SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
             timeZone = TimeZone.getTimeZone("UTC")
         }.format(Date())
-    }
-
-    private fun queryDisplayName(uri: Uri): String? {
-        contentResolver.query(uri, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME), null, null, null)
-            ?.use { cursor ->
-                val nameIndex = cursor.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME)
-                if (nameIndex >= 0 && cursor.moveToFirst()) {
-                    return cursor.getString(nameIndex)
-                }
-            }
-
-        return uri.lastPathSegment?.substringAfterLast('/')
     }
 
     private fun quotePath(path: String): String {
@@ -557,6 +555,11 @@ class MainActivity : AppCompatActivity() {
                     true
                 }
 
+                R.id.menu_tab_subtitle -> {
+                    showSubtitleTab()
+                    true
+                }
+
                 else -> false
             }
         }
@@ -566,23 +569,30 @@ class MainActivity : AppCompatActivity() {
     private fun showConverterTab() {
         converterTabContainer.visibility = View.VISIBLE
         playerTabContainer.visibility = View.GONE
+        subtitleTabContainer.visibility = View.GONE
     }
 
     private fun showPlayerTab() {
         converterTabContainer.visibility = View.GONE
         playerTabContainer.visibility = View.VISIBLE
+        subtitleTabContainer.visibility = View.GONE
         playerController.refresh()
+    }
+
+    private fun showSubtitleTab() {
+        converterTabContainer.visibility = View.GONE
+        playerTabContainer.visibility = View.GONE
+        subtitleTabContainer.visibility = View.VISIBLE
     }
 
     private fun handleIncomingIntent(intent: Intent?) {
         val sourceUri = extractSourceUri(intent) ?: return
         bindSelectedSource(sourceUri, fromExternalApp = true)
+        showConverterTab()
     }
 
     private fun extractSourceUri(intent: Intent?): Uri? {
-        if (intent == null) {
-            return null
-        }
+        if (intent == null) return null
 
         return when (intent.action) {
             Intent.ACTION_SEND -> {
@@ -605,21 +615,17 @@ class MainActivity : AppCompatActivity() {
         }
 
         selectedSourceUri = uri
-        selectedSourceInfo = readSourceInfo(uri)
+        selectedSourceInfo = MediaSourceUtils.readSourceInfo(this, uri)
         selectedFileText.text = getString(
             R.string.selected_file_value,
-            queryDisplayName(uri) ?: uri.toString()
+            MediaSourceUtils.queryDisplayName(this, uri) ?: uri.toString()
         )
         sourceInfoText.text = getString(
             R.string.source_info_value,
-            selectedSourceInfo?.describe() ?: getString(R.string.error_unknown_stream)
+            selectedSourceInfo?.describe(this) ?: getString(R.string.error_unknown_stream)
         )
         updateStatus(
-            if (fromExternalApp) {
-                getString(R.string.status_received_external)
-            } else {
-                getString(R.string.status_ready)
-            }
+            if (fromExternalApp) getString(R.string.status_received_external) else getString(R.string.status_ready)
         )
         convertButton.isEnabled = true
     }
@@ -631,9 +637,7 @@ class MainActivity : AppCompatActivity() {
                 Intent.FLAG_GRANT_READ_URI_PERMISSION
             )
         } catch (_: SecurityException) {
-            // Some providers do not expose persistable permissions.
         } catch (_: UnsupportedOperationException) {
-            // File and some provider URIs do not support persistable access.
         }
     }
 
@@ -641,30 +645,6 @@ class MainActivity : AppCompatActivity() {
         try {
             grantPersistableReadPermission(uri)
         } catch (_: Exception) {
-            // Best effort only.
-        }
-    }
-
-    private fun readSourceInfo(uri: Uri): SourceInfo? {
-        return runCatching {
-            val retriever = MediaMetadataRetriever()
-            retriever.use {
-                it.setDataSource(this, uri)
-                val hasVideo =
-                    it.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_VIDEO) == "yes"
-                val hasAudio =
-                    it.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO) == "yes"
-                SourceInfo(hasAudio = hasAudio, hasVideo = hasVideo)
-            }
-        }.getOrNull()
-    }
-
-    private fun openSourceInputStream(uri: Uri): InputStream? {
-        return if (uri.scheme == "file") {
-            val path = uri.path ?: return null
-            FileInputStream(path)
-        } else {
-            contentResolver.openInputStream(uri)
         }
     }
 }
@@ -674,24 +654,15 @@ private data class ConversionResult(
     val destinationDescription: String
 )
 
-private data class SourceInfo(
-    val hasAudio: Boolean,
-    val hasVideo: Boolean
-) {
-    fun describe(): String {
-        return when {
-            hasAudio && hasVideo -> "包含音频和视频"
-            hasVideo -> "仅包含视频"
-            hasAudio -> "仅包含音频"
-            else -> "未识别到音频或视频流"
-        }
-    }
-}
-
 private enum class AudioBitrate(val ffmpegValue: String) {
     K128("128k"),
     K192("192k"),
     K320("320k")
+}
+
+private enum class PickTarget {
+    CONVERTER,
+    SUBTITLE
 }
 
 private class SimpleItemSelectedListener(

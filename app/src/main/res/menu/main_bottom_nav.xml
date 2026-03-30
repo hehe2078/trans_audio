@@ -9,4 +9,9 @@
         android:id="@+id/menu_tab_player"
         android:icon="@android:drawable/ic_media_play"
         android:title="@string/tab_player" />
+
+    <item
+        android:id="@+id/menu_tab_subtitle"
+        android:icon="@android:drawable/ic_menu_edit"
+        android:title="@string/tab_subtitle" />
 </menu>

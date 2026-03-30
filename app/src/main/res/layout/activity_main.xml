@@ -18,6 +18,11 @@
             android:id="@+id/playerTabContainer"
             layout="@layout/activity_player"
             android:visibility="gone" />
+
+        <include
+            android:id="@+id/subtitleTabContainer"
+            layout="@layout/content_subtitle_tab"
+            android:visibility="gone" />
     </FrameLayout>
 
     <com.google.android.material.bottomnavigation.BottomNavigationView

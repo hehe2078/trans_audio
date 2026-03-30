@@ -44,4 +44,5 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("com.mrljdx:ffmpeg-kit-full:6.1.4")
+    implementation(project(":whisperlib"))
 }
